@@ -1,7 +1,7 @@
 include <BOSL2/std.scad>
 include <BOSL2/nema_steppers.scad>
 
-$fn = 100;
+$fn = 50;
 
 // ========== CONSTANTS ========== //
 
@@ -9,10 +9,20 @@ gusset_width = 5;
 gusset_side = 15;
 mount_screw_d = 4;
 ball_bearing_od = 14;
+nema_14_shaft_l = 24; // \pm 1
+nema_17_shaft_l = 24; // \pm 1
+nema_23_shaft_l = 21; // \pm 0.5
 
 // ========== LOGIC ========== //
-
-function belt_l_to_z(mod_val, l, adj_gear_z) = 2 * l / mod_val - adj_gear_z;
+function const_values() = [
+    gusset_width,
+    gusset_side,
+    mount_screw_d,
+    ball_bearing_od,
+    nema_14_shaft_l,
+    nema_17_shaft_l,
+    nema_23_shaft_l
+];
 
 // ========== STRUCTURES ========== //
 
@@ -44,56 +54,117 @@ module gusset(side_length, width) {
     SHAFT_DIAM:     The diameter of the motor shaft.
 */
 
-// size represents the characteristic NEMA of the setup which will determine dimensions of the rest.
+module nema_vertical_mount_base(
+    size,
+    screw_distance,
+    screw_slit_l,
+    screw_margin,
+    ridge_depth = 3,
+    ridge_height = 5,
+    ridge_margin = 2,
+    show_shaft = false
+) {
+    info = nema_motor_info(size);
+    motor_width = info[0];
+    plinth_height = info[1];
+
+    motor_base_width = motor_width;
+    motor_base_depth = motor_width;
+    motor_base_height = plinth_height * 2;
+    motor_base = [motor_base_width, motor_base_depth, motor_base_height];
+
+    mount_width = screw_distance + 2 * screw_margin;
+    mount_depth = motor_base.y + ridge_depth + 2 * ridge_margin;
+    mount_height = motor_base.z;
+    mount = [mount_width, mount_depth, mount_height];
+
+    ridge_width = mount.x;
+    ridge_depth = ridge_depth;
+    ridge_height = ridge_height; 
+    ridge = [ridge_width, ridge_depth, ridge_height];
+
+    assert(mount_width > motor_width, "Mount width too low for motor size.");
+
+    difference() {
+        translate([0, 0, plinth_height])
+            difference() {
+                union() {
+                    cube(mount, center=true);
+                    translate([0, mount.y / 2 - ridge_margin, (ridge.z + mount.z) / 2])
+                        cube(ridge, center=true);
+                    translate([0, -(mount.y / 2 - ridge_margin), (ridge.z + mount.z) / 2])
+                        cube(ridge, center=true);
+                }
+                nema_mount_mask(size=size);
+            }
+
+        translate([(mount.x / 2 - screw_margin), 0, 0])
+            tolerant_screw_hole(mount.y - (2 * screw_margin + ridge_depth + 2 * ridge_margin) , mount_screw_d, 20);
+
+        translate([-(mount.x / 2 - screw_margin), 0, 0])
+            tolerant_screw_hole(mount.y - (2 * screw_margin + ridge_depth + 2 * ridge_margin), mount_screw_d, 20);
+    }
+
+    %if(show_shaft == true) {
+        shaft_d = 5;
+        if(size == 14) {
+            translate([0, 0, nema_14_shaft_l / 2])
+                cylinder(d = shaft_d, h = nema_14_shaft_l, center = true);
+        }
+        else if(size == 17) {
+            translate([0, 0, nema_17_shaft_l / 2])
+                cylinder(d = shaft_d, h = nema_17_shaft_l, center = true);
+        }
+        else if(size == 23) {
+            translate([0, 0, nema_23_shaft_l / 2])
+                cylinder(d = shaft_d, h = nema_23_shaft_l, center = true);
+        }
+    }
+}
+
+module gusset_l_mount(plate) {
+    union() {
+        //bore plate
+        translate([0, 0, plate.z / 2])
+            cube(plate, center=true);
+
+        // base plate
+        translate([(plate.x + plate.z) / 2, 0, plate.x / 2])
+            rotate([0, 90, 0])
+                cube(plate, center=true);
+    }
+    translate([plate.x / 2, -(plate.y / 2), plate.z]) {
+        rotate([90, 0, 180])
+            gusset(gusset_side, gusset_width);
+
+        translate([0, plate.y - gusset_width, 0])
+            rotate([90, 0, 180])
+                gusset(gusset_side, gusset_width);
+    }
+}
+
+module base_gusset_l_mount(plate) {
+    difference() {
+        translate([gusset_side / 2, 0, 0]) 
+            gusset_l_mount(plate);
+        
+        children(); 
+    }
+}
+
 module idle_gusset_l_mount(size) {
     info = nema_motor_info(size);
     motor_width = info[0];
     plinth_height = info[1];
 
-    translate([gusset_side / 2, 0, plinth_height])
-        cube([motor_width + gusset_side, 0, plinth_height * 2], center = true);
-    translate([motor_width / 2 + gusset_side + plinth_height, 0, motor_width / 2 + gusset_side / 2])
-        rotate([0, 90, 0])
-            cube([motor_width + gusset_side, 0, plinth_height * 2], center = true);
-    difference() {
-        translate([0, 0, 0]) {
-            union() {
-                translate([0, 0, plinth_height])
-                    difference() {
-                        translate([gusset_side / 2, 0, 0])
-                        cube([
-                            motor_width + gusset_side, 
-                            ball_bearing_od * 2, 
-                            plinth_height * 2
-                        ], center=true);
-                    }
+    //base plate
+    plate_width = motor_width + gusset_side;
+    plate_depth = ball_bearing_od * 2;
+    plate_height = plinth_height * 2;
+    plate = [plate_width, plate_depth, plate_height];
 
-                translate([
-                    motor_width / 2 + gusset_side + plinth_height, 
-                    0, 
-                    motor_width / 2 + gusset_side / 2
-                ])
-                    rotate([0, 90, 0])
-                        difference() {
-                            cube([
-                                motor_width + gusset_side, 
-                                ball_bearing_od * 2, 
-                                plinth_height * 2
-                            ], center=true);
-                        }
-            }
-            translate([(motor_width / 2 + gusset_side), -(ball_bearing_od), plinth_height * 2])
-                rotate([90, 0, 180])
-                    gusset(gusset_side, gusset_width);
-
-            translate([(motor_width / 2 + gusset_side), ball_bearing_od - gusset_width, plinth_height * 2])
-                rotate([90, 0, 180])
-                    gusset(gusset_side, gusset_width);
-        }
-
-        translate([0, 0, 0])
-            cylinder(d = ball_bearing_od, h = 100, center = true);
-    }
+    base_gusset_l_mount(plate)
+        cylinder(d = ball_bearing_od, h = 100, center = true);
 }
 
 module nema_gusset_l_mount(size) {
@@ -101,47 +172,24 @@ module nema_gusset_l_mount(size) {
     motor_width = info[0];
     plinth_height = info[1];
 
-    union() {
-        translate([0, 0, plinth_height])
-            difference() {
-                translate([gusset_side / 2, 0, 0])
-                cube([
-                    motor_width + gusset_side, 
-                    motor_width + 2 * gusset_width, 
-                    plinth_height * 2
-                ], center=true);
-                nema_mount_mask(size=size);
-            }
+    plate_width = motor_width + gusset_side;
+    plate_depth = motor_width + 2 * gusset_width;
+    plate_height = plinth_height * 2;
+    plate = [plate_width, plate_depth, plate_height];
 
-        translate([
-            motor_width / 2 + gusset_side + plinth_height, 
-            0, 
-            motor_width / 2 + gusset_side / 2
-        ])
-            rotate([0, 90, 0])
-                difference() {
-                    cube([
-                        motor_width + gusset_side, 
-                        motor_width + 2 * gusset_width, 
-                        plinth_height * 2
-                    ], center=true);
+    base_gusset_l_mount(plate) {
+        translate([0, 0, plate.z / 2])
+            nema_mount_mask(size=size);
 
-                    translate([0, motor_width / 3, 0])
-                        rotate([0, 0, 90])
-                            tolerant_screw_hole(2 * motor_width / 3, mount_screw_d, plinth_height * 2 + 1);
-                    translate([0, -motor_width / 3, 0])
-                        rotate([0, 0, 90])
-                            tolerant_screw_hole(2 * motor_width / 3, mount_screw_d, plinth_height * 2 + 1);
-                }
+        translate([(plate.x + plate.z + gusset_side) / 2, 0, plate.x / 2]) {
+            translate([0, motor_width / 3, 0])
+                rotate([90, 0, 90])
+                    tolerant_screw_hole(2 * motor_width / 3, mount_screw_d, plinth_height * 2 + 1);
+            translate([0, -motor_width / 3, 0])
+                rotate([90, 0, 90])
+                    tolerant_screw_hole(2 * motor_width / 3, mount_screw_d, plinth_height * 2 + 1);
+        }
     }
-
-    translate([(motor_width / 2 + gusset_side), -(motor_width / 2 + gusset_width), plinth_height * 2])
-        rotate([90, 0, 180])
-            gusset(gusset_side, gusset_width);
-
-    translate([(motor_width / 2 + gusset_side), motor_width / 2, plinth_height * 2])
-        rotate([90, 0, 180])
-            gusset(gusset_side, gusset_width);
 }
 
 module adjacent_idle_mounts(
@@ -196,25 +244,7 @@ module gear_test_stand(
     size,
     mod_val,
     z_list
-) { 
-    info = nema_motor_info(size);
-    motor_width = info[0];
-    plinth_height = info[1];
-
-    nema_mount_width = motor_width + gusset_side;
-    nema_mount_depth = motor_width + 2 * gusset_width;
-    nema_mount_height = plinth_height * 2;
-    nema_mount = [nema_mount_width, nema_mount_depth, nema_mount_height];
-
-    idle_mount_width = nema_mount.x;
-    idle_mount_depth = ball_bearing_od * 2; 
-    idle_mount_height = nema_mount.z; 
-    idle_mount = [idle_mount_width, idle_mount_depth, idle_mount_height];
-
-    center_distance = ((z_list[0] + z_list[1]) * mod_val) / 2;
-    gap_size = center_distance - (nema_mount.y + idle_mount.y) / 2;
-    average_center = (nema_mount.y + gap_size) / 2;
-
+) {
     assert(len(z_list) >= 2, "Invalid test stand input");
     distance_list = [
         for(i = [0 : len(z_list) - 2]) (z_list[i] + z_list[i + 1]) * mod_val / 2
@@ -234,29 +264,6 @@ module pulley_gear_test_stand(
     distances,
     positions
 ) {
-    info = nema_motor_info(size);
-    motor_width = info[0];
-    plinth_height = info[1];
-
-    nema_mount_width = motor_width + gusset_side;
-    nema_mount_depth = motor_width + 2 * gusset_width;
-    nema_mount_height = plinth_height * 2;
-    nema_mount = [nema_mount_width, nema_mount_depth, nema_mount_height];
-
-    idle_mount_width = nema_mount.x;
-    idle_mount_depth = ball_bearing_od * 2; 
-    idle_mount_height = nema_mount.z; 
-    idle_mount = [idle_mount_width, idle_mount_depth, idle_mount_height];
-
-    center_distance = distances[0];
-    gap_size = center_distance - (nema_mount.y + idle_mount.y) / 2;
-    average_center = (nema_mount.y + gap_size) / 2;
-
-    gap_panel_width = nema_mount.x;
-    gap_panel_depth = gap_size;
-    gap_panel_height = nema_mount.z;
-    gap_panel = [gap_panel_width, gap_panel_depth, gap_panel_height];
-
     nema_gusset_l_mount(size);
     adjacent_idle_mounts(
         size,
@@ -269,8 +276,10 @@ size = 17;
 mod = 2;
 z = [24, 24];
 
-// nema_gusset_l_mount(size);
-gear_test_stand(
+*idle_gusset_l_mount(size);
+
+*nema_gusset_l_mount(size);
+*gear_test_stand(
     size,
     mod,
     z
@@ -282,8 +291,10 @@ pulley_belt_l = (pulley_ratio * PI / 180) * pulley_r;
 distances = [(200 - 2 * pulley_belt_l) / 2, (24 + 24) * mod / 2];
 positions = cumsum(distances);
 
-!pulley_gear_test_stand(
+*pulley_gear_test_stand(
     size,
     distances,
     positions
 );
+
+!nema_vertical_mount_base(size, 80, 20, mount_screw_d, show_shaft = true);

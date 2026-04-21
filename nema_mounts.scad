@@ -73,8 +73,9 @@ module nema_vertical_mount_base(
     motor_base_height = plinth_height * 2;
     motor_base = [motor_base_width, motor_base_depth, motor_base_height];
 
+    motor_ridge_clearance = 1; // 0.5mm per side
     mount_width = screw_distance + 2 * screw_margin;
-    mount_depth = motor_base.y + ridge_depth + 2 * ridge_margin;
+    mount_depth = motor_base.y + ridge_depth + 2 * ridge_margin + motor_ridge_clearance;
     mount_height = motor_base.z;
     mount = [mount_width, mount_depth, mount_height];
 
@@ -84,6 +85,9 @@ module nema_vertical_mount_base(
     ridge = [ridge_width, ridge_depth, ridge_height];
 
     assert(mount_width > motor_width, "Mount width too low for motor size.");
+    %translate([0, 0, mount.z])
+        rotate([0, 180, 0])
+            nema_stepper_motor(size=size);
 
     difference() {
         translate([0, 0, plinth_height])
@@ -104,21 +108,52 @@ module nema_vertical_mount_base(
         translate([-(mount.x / 2 - screw_margin), 0, 0])
             tolerant_screw_hole(mount.y - (2 * screw_margin + ridge_depth + 2 * ridge_margin), mount_screw_d, 20);
     }
+}
 
-    %if(show_shaft == true) {
-        shaft_d = 5;
-        if(size == 14) {
-            translate([0, 0, nema_14_shaft_l / 2])
-                cylinder(d = shaft_d, h = nema_14_shaft_l, center = true);
-        }
-        else if(size == 17) {
-            translate([0, 0, nema_17_shaft_l / 2])
-                cylinder(d = shaft_d, h = nema_17_shaft_l, center = true);
-        }
-        else if(size == 23) {
-            translate([0, 0, nema_23_shaft_l / 2])
-                cylinder(d = shaft_d, h = nema_23_shaft_l, center = true);
-        }
+module nema_vertical_mount_support_mask(
+    size,
+    col_height,
+    screw_distance,
+    screw_slit_l,
+    screw_margin,
+    ridge_depth = 3,
+    ridge_height = 5,
+    ridge_margin = 2,
+    show_shaft = false
+) {
+    info = nema_motor_info(size);
+    motor_width = info[0];
+    plinth_height = info[1];
+
+    motor_base_width = motor_width;
+    motor_base_depth = motor_width;
+    motor_base_height = plinth_height * 2;
+    motor_base = [motor_base_width, motor_base_depth, motor_base_height];
+
+    motor_ridge_clearance = 1; // 0.5mm per side
+    mount_width = screw_distance + 2 * screw_margin;
+    mount_depth = motor_base.y + ridge_depth + 2 * ridge_margin + motor_ridge_clearance;
+    mount_height = motor_base.z;
+    mount = [mount_width, mount_depth, mount_height];
+
+    ridge_width = mount.x;
+    ridge_depth = ridge_depth;
+    ridge_height = ridge_height; 
+    ridge = [ridge_width, ridge_depth, ridge_height];
+    
+    support_col_width = 2 * mount_screw_d;
+    support_col_depth = mount.y - (2 * screw_margin + ridge_depth + 2 * ridge_margin); 
+    support_col_height = col_height;
+    support_col = [support_col_width, support_col_depth, support_col_height];
+
+    union() {
+        translate([0, 0, -(support_col.z + mount.z / 2)])
+        cube(mount, center=true);
+        translate([(mount.x / 2 - screw_margin), 0, -(support_col.z / 2)])
+            cube(support_col, center = true);
+
+        translate([-(mount.x / 2 - screw_margin), 0, -(support_col.z / 2)])
+            cube(support_col, center = true);
     }
 }
 
@@ -301,4 +336,12 @@ positions = cumsum(distances);
     positions
 );
 
-!nema_vertical_mount_base(size, 80, 20, mount_screw_d, show_shaft = true);
+nema_vertical_mount_base(size, 80, 20, mount_screw_d, show_shaft = false);
+
+nema_vertical_mount_support_mask(
+    size,
+    col_height = 30,
+    screw_distance = 80,
+    screw_slit_l = 20,
+    screw_margin = mount_screw_d
+);

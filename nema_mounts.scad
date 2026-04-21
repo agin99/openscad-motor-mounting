@@ -240,6 +240,8 @@ module adjacent_idle_mounts(
     }
 }
 
+// ========== BUILD ========== //
+
 module gear_test_stand(
     size,
     mod_val,
@@ -271,6 +273,8 @@ module pulley_gear_test_stand(
         positions
     );
 }
+
+// ========== ASSEMBLY ========== //
 
 size = 17; 
 mod = 2;

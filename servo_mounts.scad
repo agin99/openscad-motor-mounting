@@ -65,27 +65,29 @@ mount_screw_d =     3;
 mount_screw_l =     20;
 mount_screw_dist =  6;
 
+// ========== LOGIC ========== //
+
 // ========== STRUCTURES ========== //
+module mirror_copy(vector) {
+    children();
+    mirror(vector) children();
+}
 
 module tolerant_screw_hole(separation, d, l) {
     hull() {
-        translate([0, -separation / 2, 0])
-            cylinder(d = d, h = l, center = true);
-        translate([0, separation / 2, 0])
-            cylinder(d = d, h = l, center = true);
+        mirror_copy([0, 1, 0])
+            translate([0, -separation / 2, 0])
+                cylinder(d = d, h = l, center = true);
     }
 }
 
 module tolerant_nut_trap(separation, thickness, d) {
     hull() {
-        translate([0, 0, -separation / 2])
-            rotate([90, 0, 0])
-                linear_extrude(thickness)
-                    nut(d);
-        translate([0, 0, separation / 2])
-            rotate([90, 0, 0])
-                linear_extrude(thickness)
-                    nut(d);
+        mirror_copy([0, 0, 1])
+            translate([0, 0, -separation / 2])
+                rotate([90, 0, 0])
+                    linear_extrude(thickness)
+                        nut(d);
     }
 }
 
@@ -108,37 +110,31 @@ module mg90s_mount_base() {
             mg90s_micro_servo_mask();
         cube([servo_base.x, wing.z + 1, servo_base.y], center = true);
 
-        translate([-wing_screw_dist / 2, (wing.z) / 2, 0])
-            tolerant_nut_trap(nut_dist, nut_thickness, screw_d);
-
-        translate([wing_screw_dist / 2, (wing.z) / 2, 0])
-            tolerant_nut_trap(nut_dist, nut_thickness, screw_d);
+        mirror_copy([1, 0, 0]) 
+            translate([-wing_screw_dist / 2, (wing.z) / 2, 0])
+                tolerant_nut_trap(nut_dist, nut_thickness, screw_d);
     }
 
     translate([0, (support_base.y - support_col.y) / 2, -(servo_base.y + support_base.z) / 2 - support_col.z])
         difference() {
             union() {
                 cube(support_base, center = true);
-                translate([
-                    -(support_base.x - support_col.x) / 2, 
-                    -(support_base.y - support_col.y) / 2, 
-                    (support_base.z + support_col.z) / 2
-                ])
-                    cube(support_col, center = true);
-                translate([
-                    (support_base.x - support_col.x) / 2, 
-                    -(support_base.y - support_col.y) / 2, 
-                    (support_base.z + support_col.z) / 2
-                ])
-                    cube(support_col, center = true);
+                mirror_copy([1, 0, 0]) 
+                    translate([
+                        -(support_base.x - support_col.x) / 2, 
+                        -(support_base.y - support_col.y) / 2, 
+                        (support_base.z + support_col.z) / 2
+                    ])
+                        cube(support_col, center = true);
             }
 
-            translate([wing.x / 2 - mount_screw_d, 2, 0]) 
-                tolerant_screw_hole(mount_screw_dist, mount_screw_d, mount_screw_l);
-            translate([-wing.x / 2 + mount_screw_d, 2, 0])
-                tolerant_screw_hole(mount_screw_dist, mount_screw_d, mount_screw_l);
+            mirror_copy([1, 0, 0]) 
+                translate([wing.x / 2 - mount_screw_d, 2, 0]) 
+                    tolerant_screw_hole(mount_screw_dist, mount_screw_d, mount_screw_l);
         }
 }
+
+// ========== BUILD ========== //
 
 module servo_test_stand(
     mod_val,
@@ -195,10 +191,9 @@ module servo_test_stand(
 
         translate([-mount_screw_l / 2, (support_base.y - support_col.y) / 2, 0])
             rotate([0, 90, 0]) {
-                translate([wing.x / 2 - mount_screw_d, 2, 0]) 
-                    cylinder(d = mount_screw_d, h = mount_screw_l, center = true);
-                translate([-wing.x / 2 + mount_screw_d, 2, 0])
-                    cylinder(d = mount_screw_d, h = mount_screw_l, center = true);
+                mirror_copy([1, 0, 0])
+                    translate([wing.x / 2 - mount_screw_d, 2, 0]) 
+                        cylinder(d = mount_screw_d, h = mount_screw_l, center = true);
             }
     }
     translate([
@@ -247,8 +242,8 @@ module servo_test_stand(
 }
 
 // ========== ASSEMBLY ========== //
-!mg90s_mount_base();
-servo_test_stand(
+*mg90s_mount_base();
+!servo_test_stand(
     2,
     24,
     24
